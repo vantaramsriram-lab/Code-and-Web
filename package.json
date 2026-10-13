@@ -1,0 +1,27 @@
+{
+  "name": "spark-club-quiz",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev --workspace server\" \"npm:dev --workspace client\"",
+    "build": "npm run build --workspace client",
+    "test": "npm test --workspace server",
+    "test:integration": "npm run test:integration --workspace server",
+    "seed:test": "npm run seed:test --workspace server",
+    "csv:testdata": "npm run csv:testdata --workspace server",
+    "load": "k6 run loadtest/quiz-flow.js",
+    "load:local": "npm run load:local --workspace server",
+    "db:indexes": "npm run db:indexes --workspace server",
+    "create-admin": "npm run create-admin --workspace server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "react-icons": "^5.7.0"
+  }
+}

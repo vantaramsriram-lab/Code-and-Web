@@ -1,0 +1,2 @@
+const labels = { draft: 'Draft', scheduled: 'Scheduled', live: 'Live now', closed: 'Closed', in_progress: 'In progress', submitted: 'Submitted', auto_submitted: 'Auto-submitted', expired: 'Expired', not_attempted: 'Not attempted' };
+export default function StatusBadge({ status }) { return <span className={`badge badge-${String(status || 'draft').replaceAll('_', '-')}`}>{labels[status] || status}</span>; }
