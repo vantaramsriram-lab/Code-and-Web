@@ -148,8 +148,17 @@ router.post('/students/import', (req, res, next) => upload.single('file')(req, r
   const rows = parseStudentCsv(req.file.buffer);
   const normalized = rows.map((row) => ({ ...row, record: { ...row.record, scholarNumber: normalizeScholarNumber(row.record.scholarNumber) } }));
   const incoming = [...new Set(normalized.map((r) => r.record.scholarNumber).filter(Boolean))];
-  const existing = new Set((await Student.find({ scholarNumber: { $in: incoming } }).select('scholarNumber').lean()).map((s) => s.scholarNumber));
-  const summary = validateRows(normalized, existing);
+  const existing = new Set(
+    (
+      await Student.find({
+        scholarNumber: mongoose.trusted({
+          $in: incoming
+        })
+      })
+        .select('scholarNumber')
+        .lean()
+    ).map((student) => student.scholarNumber)
+  ); const summary = validateRows(normalized, existing);
   if (req.body.mode !== 'commit') return res.json({ preview: true, totalRows: summary.totalRows, validRows: summary.candidates.length, duplicateSkipped: summary.duplicateSkipped, invalidRows: summary.invalidRejected, existingSkipped: summary.existingSkipped, candidates: summary.candidates.slice(0, 100), moreCandidates: summary.candidates.length > 100, failures: summary.failures.slice(0, 100), moreFailures: summary.failures.length > 100 });
   let imported = 0;
   for (let offset = 0; offset < summary.candidates.length; offset += 250) {

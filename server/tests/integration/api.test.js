@@ -113,6 +113,38 @@ test('auth, admin protections, quiz answer persistence, submission privacy, CSV 
   });
   await t.test('CSV preview, import, retry, duplicate handling, template, and leading zeroes', async () => {
     const csv = 'name,scholarNumber,email\nCSV Fictional,000501,csv@example.com\n,000502,invalid@example.com\nRepeat First,000503,first@example.com\nRepeat Second,000503,second@example.com\n';
+    // Regression test: preview handles multiple existing scholar numbers.
+    const beforePreviewCount = await Student.countDocuments();
+
+    const existingCsv = [
+      'name,scholarNumber,email',
+      'Existing One,000101,existing-one@example.com',
+      'Existing Two,000102,existing-two@example.com',
+      'New Preview Student,000505,new-preview@example.com'
+    ].join('\n');
+
+    const existingPreview = await adminAgent
+      .post('/api/admin/students/import')
+      .attach('file', Buffer.from(existingCsv), 'existing-students.csv')
+      .field('mode', 'preview')
+      .expect(200);
+
+    assert.equal(existingPreview.body.preview, true);
+    assert.equal(existingPreview.body.totalRows, 3);
+    assert.equal(existingPreview.body.validRows, 1);
+    assert.equal(existingPreview.body.existingSkipped, 2);
+
+    assert.deepEqual(
+      existingPreview.body.candidates.map((student) => student.scholarNumber),
+      ['000505']
+    );
+
+    // Preview must not insert the new student.
+    assert.equal(await Student.countDocuments(), beforePreviewCount);
+    assert.equal(
+      await Student.exists({ scholarNumber: '000505' }),
+      null
+    );
     const preview = await adminAgent.post('/api/admin/students/import').attach('file', Buffer.from(csv), 'students.csv').field('mode', 'preview').expect(200);
     assert.equal(preview.body.totalRows, 4); assert.equal(preview.body.validRows, 2); assert.equal(preview.body.duplicateSkipped, 1); assert.equal(preview.body.invalidRows, 1);
     const imported = await adminAgent.post('/api/admin/students/import').attach('file', Buffer.from(csv), 'students.csv').field('mode', 'commit').expect(200);
