@@ -60,7 +60,7 @@ router.put('/quiz/attempt/:attemptId/answer', async (req, res) => {
   const question = attempt.questionSnapshot.find((q) => String(q.questionId) === questionId);
   if (!question || selectedOption < 0 || selectedOption >= question.options.length) throw new HttpError(400, 'Invalid question or answer option.');
   const path = `answers.${questionId}`;
-  const filter = { _id: attempt._id, studentId: req.auth.id, status: 'in_progress', deadlineAt: { $gt: new Date() }, $or: [ { [`${path}.revision`]: { $exists: false } }, { [`${path}.revision`]: { $lt: revision } }, { [`${path}.revision`]: revision, [`${path}.selectedOption`]: selectedOption } ] };
+  const filter = { _id: attempt._id, studentId: req.auth.id, status: 'in_progress', deadlineAt: mongoose.trusted({ $gt: new Date() }), $or: [ { [`${path}.revision`]: { $exists: false } }, { [`${path}.revision`]: { $lt: revision } }, { [`${path}.revision`]: revision, [`${path}.selectedOption`]: selectedOption } ] };
   const updated = await Attempt.findOneAndUpdate(filter, { $set: { [path]: { selectedOption, revision } } }, { new: true });
   if (updated) return res.json({ saved: true, selectedOption, revision });
   attempt = await Attempt.findById(attempt._id);
