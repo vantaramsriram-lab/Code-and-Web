@@ -252,9 +252,11 @@ router.post('/quiz/reset', async (_req, res) => {
 
   // Do not reset while students still have active attempts.
   const activeAttempts = await Attempt.countDocuments({
-    quizId: quiz._id,
-    status: { $in: ['in_progress', 'finalizing'] }
-  });
+  quizId: quiz._id,
+  status: mongoose.trusted({
+    $in: ['in_progress', 'finalizing']
+  })
+});
 
   if (activeAttempts > 0) {
     throw new HttpError(
