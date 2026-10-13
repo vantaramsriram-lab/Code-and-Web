@@ -246,6 +246,40 @@ router.post('/quiz/start', async (_req, res) => {
   res.json({ status: getQuizState(quiz), startAt: quiz.startAt, endAt: quiz.endAt });
 });
 router.post('/quiz/close', async (_req, res) => { const quiz = await currentQuiz(); const now = new Date(); quiz.status = 'closed'; quiz.endAt = now; await quiz.save(); await Attempt.updateMany({ quizId: quiz._id, status: 'in_progress' }, { $set: { deadlineAt: now } }); await finalizeExpiredAttempts(now); res.json({ status: 'closed' }); });
+
+router.post('/quiz/reset', async (_req, res) => {
+  const quiz = await currentQuiz();
+
+  // Do not reset while students still have active attempts.
+  const activeAttempts = await Attempt.countDocuments({
+    quizId: quiz._id,
+    status: { $in: ['in_progress', 'finalizing'] }
+  });
+
+  if (activeAttempts > 0) {
+    throw new HttpError(
+      409,
+      'Cannot reset while attempts are still active. Close the quiz first.'
+    );
+  }
+
+  // IMPORTANT: This permanently deletes this quiz's old attempts/results.
+  await Attempt.deleteMany({ quizId: quiz._id });
+
+  // Keep the same quiz and its existing questions.
+  quiz.status = 'draft';
+  quiz.startAt = null;
+  quiz.endAt = null;
+  quiz.lockedAt = null;
+  quiz.resultsVisible = false;
+  await quiz.save();
+
+  res.json({
+    ok: true,
+    message: 'Quiz reset. Existing questions are preserved.'
+  });
+});
+
 router.get('/results', async (req, res) => { const quiz = await currentQuiz(); const [result, stats] = await Promise.all([resultRows(quiz, req.query), resultStats(quiz)]); res.json({ ...result, stats }); });
 router.get('/results/export', async (req, res) => {
   const quiz = await currentQuiz();
