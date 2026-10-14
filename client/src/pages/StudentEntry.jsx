@@ -42,7 +42,7 @@ export default function StudentEntry() {
         <div className="eyebrow"><Sparkles size={16}/> SPARK CLUB · THINK SHARP</div>
         <h1>Ready to<br/><span>spark?</span></h1>
         <p className="lead">A little curiosity goes a long way. Sign in with your registered scholar number and take on the Spark Club quiz.</p>
-        <div className="entry-note"><span className="note-icon"><Clock3 size={20}/></span><div><b>{quiz?.title || 'Spark Club Quiz'}</b><span>{quiz?.state === 'live' ? 'The quiz is live now.' : quiz?.state === 'scheduled' ? `Starts ${formatIst(quiz?.startAt)}.` : quiz?.state === 'closed' ? 'This quiz is now closed.' : 'Your quiz schedule will appear here.'}</span></div></div>
+        <div className="entry-note flex justify-center items-center \"><span className="note-icon"><Clock3 size={20}/></span><div><b>{quiz?.title || 'Spark Club Quiz'}</b><span>{quiz?.state === 'live' ? 'The quiz is live now.' : quiz?.state === 'scheduled' ? `Starts ${formatIst(quiz?.startAt)}.` : quiz?.state === 'closed' ? 'This quiz is now closed.' : 'Your quiz schedule will appear here.'}</span></div></div>
         <div className="privacy-note"><ShieldCheck size={18}/><span>One attempt per student. Your identity is checked against the club’s active student list.</span></div>
       </div>
       <div className="entry-card">
