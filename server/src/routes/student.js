@@ -38,8 +38,15 @@ router.post('/quiz/attempt/start', async (req, res) => {
     if (attempt?.status === 'in_progress' && attempt.deadlineAt > now) return res.json({ attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, serverNow: new Date(), questions: snapshot(attempt), ...answerObject(attempt) } });
     throw new HttpError(409, 'You have already used your attempt for this quiz.');
   }
-  if (!quiz.lockedAt) { quiz.lockedAt = now; quiz.questionVersion += 1; await quiz.save(); }
-  res.status(201).json({ attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, serverNow: new Date(), questions: snapshot(attempt), answers: {}, answerRevisions: {} } });
+  if (!quiz.lockedAt) {
+    await quiz.updateOne(
+      { _id: quiz._id, lockedAt: null },
+      {
+        $set: { lockedAt: now },
+        $inc: { questionVersion: 1 }
+      }
+    );
+  } res.status(201).json({ attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, serverNow: new Date(), questions: snapshot(attempt), answers: {}, answerRevisions: {} } });
 });
 router.get('/quiz/attempt/current', async (req, res) => {
   const quiz = await currentQuiz();
