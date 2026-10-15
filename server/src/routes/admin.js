@@ -222,7 +222,7 @@ router.delete('/questions/:questionId', async (req, res) => {
   if (!question) throw new HttpError(404, 'Question not found.');
   res.json({ ok: true });
 });
-router.get('/quiz/settings', async (_req, res) => { const quiz = await currentQuiz(); res.json({ quiz: { id: String(quiz._id), title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, durationMinutes: quiz.durationMinutes, resultsVisible: quiz.resultsVisible, questionVersion: quiz.questionVersion, locked: Boolean(quiz.lockedAt), durationMinutes: quiz.durationMinutes } }); });
+router.get('/quiz/settings', async (_req, res) => { const quiz = await currentQuiz(); res.json({ quiz: { id: String(quiz._id), title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, durationMinutes: quiz.durationMinutes, resultsVisible: quiz.resultsVisible, questionVersion: quiz.questionVersion, locked: Boolean(quiz.lockedAt) } }); });
 router.put('/quiz/settings', async (req, res) => {
   const quiz = await currentQuiz();
   if (quiz.lockedAt || quiz.status === 'live' || await Attempt.exists({ quizId: quiz._id })) throw new HttpError(409, 'Quiz settings are locked after the quiz goes live or an attempt starts. Close the quiz to stop attempts.');
@@ -233,7 +233,7 @@ router.put('/quiz/settings', async (req, res) => {
   if (data.status) quiz.status = data.status;
   if (data.status === 'live' || data.status === 'scheduled') quiz.lockedAt = new Date();
   await quiz.save();
-  res.json({ quiz: { title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, locked: Boolean(quiz.lockedAt) } });
+  res.json({ quiz: { title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, durationMinutes: quiz.durationMinutes, locked: Boolean(quiz.lockedAt) } });
 });
 router.post('/quiz/start', async (_req, res) => {
   const quiz = await currentQuiz();
