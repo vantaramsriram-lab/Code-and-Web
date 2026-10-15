@@ -7,7 +7,7 @@ const quizSchema = new mongoose.Schema({
   startAt: { type: Date, default: null },
   endAt: { type: Date, default: null },
   durationMinutes: { type: Number, min: 1, max: 180, default: 20 },
-  pausedAt: { type: Date, default: null }
+  pausedAt: { type: Date, default: null },
   resultsVisible: { type: Boolean, default: false },
   questionVersion: { type: Number, default: 1 },
   lockedAt: { type: Date, default: null }
