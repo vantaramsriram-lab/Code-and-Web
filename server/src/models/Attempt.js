@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 const answerSchema = new mongoose.Schema({ selectedOption: { type: Number, min: 0 }, revision: { type: Number, min: 1 } }, { _id: false });
-const snapshotSchema = new mongoose.Schema({ questionId: { type: mongoose.Schema.Types.ObjectId, required: true }, prompt: { type: String, required: true }, imageUrl: { type: String, default: null }, options: [{ type: String }] }, { _id: false });
+const snapshotSchema = new mongoose.Schema({ questionId: { type: mongoose.Schema.Types.ObjectId, required: true }, prompt: { type: String, required: true }, options: [{ type: String }] }, { _id: false });
 const attemptSchema = new mongoose.Schema({
   quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
