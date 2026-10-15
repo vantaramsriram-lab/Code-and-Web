@@ -27,11 +27,13 @@ router.post('/quiz/attempt/start', async (req, res) => {
   if (state !== 'live') throw new HttpError(409, state === 'scheduled' ? 'The quiz has not started yet.' : 'The quiz is not accepting new attempts.');
   const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).select('_id prompt options').lean();
   if (!questions.length) throw new HttpError(409, 'This quiz is not ready yet.');
-  const deadlineAt = new Date(now.getTime() + quiz.durationMinutes * 60 * 1000);
+  const startNow = new Date();
+  if (getQuizState(quiz, startNow) !== 'live') throw new HttpError(409, 'The quiz is no longer accepting new attempts.');
+  const deadlineAt = new Date(startNow.getTime() + quiz.durationMinutes * 60 * 1000);
   if (deadlineAt <= now) throw new HttpError(409, 'The quiz has closed.');
   let attempt;
   try {
-    attempt = await Attempt.create({ quizId: quiz._id, studentId: req.auth.id, status: 'in_progress', answers: {}, questionSnapshot: questions.map((q) => ({ questionId: q._id, prompt: q.prompt, options: q.options })), totalQuestions: questions.length, startedAt: now, deadlineAt });
+    attempt = await Attempt.create({ quizId: quiz._id, studentId: req.auth.id, status: 'in_progress', answers: {}, questionSnapshot: questions.map((q) => ({ questionId: q._id, prompt: q.prompt, options: q.options })), totalQuestions: questions.length, startedAt: startNow, deadlineAt });
   } catch (error) {
     if (error?.code !== 11000) throw error;
     attempt = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id }).select('+questionSnapshot');
