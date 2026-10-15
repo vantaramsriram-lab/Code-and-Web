@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Attempt from '../models/Attempt.js';
 import Question from '../models/Question.js';
+import Quiz from '../models/Quiz.js';
 import { scoreAnswers } from './score.js';
 
 /** Claim first so no answer can race into the scoring snapshot. Idempotent across submit, expiry, and visibility events. */
@@ -27,10 +28,13 @@ export async function finalizeAttempt(attemptId, finalStatus = 'submitted', reas
 }
 
 export async function finalizeExpiredAttempts(now = new Date()) {
+  const pausedQuizzes = await Quiz.find({ status: 'paused' }).select('_id').lean();
+  const pausedQuizIds = pausedQuizzes.map((quiz) => quiz._id);
   const due = await Attempt.find({
     $or: [
       {
         status: 'in_progress',
+        quizId: mongoose.trusted({ $nin: pausedQuizIds }),
         deadlineAt: mongoose.trusted({ $lte: now })
       },
       { status: 'finalizing' }
