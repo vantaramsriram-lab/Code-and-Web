@@ -54,7 +54,7 @@ router.get('/quiz/attempt/current', async (req, res) => {
   const quiz = await currentQuiz();
   let attempt = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id }).select('+questionSnapshot');
   if (!attempt) return res.json({ attempt: null, serverNow: new Date() });
-  if (attempt.status === 'in_progress' && attempt.deadlineAt <= new Date()) attempt = await finalizeAttempt(attempt._id, 'expired');
+  if (attempt.status === 'in_progress' && quiz.status !== 'paused' && attempt.deadlineAt <= new Date()) attempt = await finalizeAttempt(attempt._id, 'expired');
   if (attempt.status === 'finalizing') attempt = await finalizeAttempt(attempt._id, attempt.violationReason ? 'auto_submitted' : attempt.deadlineAt <= new Date() ? 'expired' : 'submitted');
   res.json({ attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, submittedAt: attempt.submittedAt, serverNow: new Date(), questions: snapshot(attempt), ...answerObject(attempt) } });
 });
