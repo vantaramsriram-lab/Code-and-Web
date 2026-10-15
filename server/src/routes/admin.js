@@ -222,18 +222,18 @@ router.delete('/questions/:questionId', async (req, res) => {
   if (!question) throw new HttpError(404, 'Question not found.');
   res.json({ ok: true });
 });
-router.get('/quiz/settings', async (_req, res) => { const quiz = await currentQuiz(); res.json({ quiz: { id: String(quiz._id), title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, resultsVisible: quiz.resultsVisible, questionVersion: quiz.questionVersion, locked: Boolean(quiz.lockedAt) } }); });
+router.get('/quiz/settings', async (_req, res) => { const quiz = await currentQuiz(); res.json({ quiz: { id: String(quiz._id), title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, durationMinutes: quiz.durationMinutes, resultsVisible: quiz.resultsVisible, questionVersion: quiz.questionVersion, locked: Boolean(quiz.lockedAt) } }); });
 router.put('/quiz/settings', async (req, res) => {
   const quiz = await currentQuiz();
   if (quiz.lockedAt || quiz.status === 'live' || await Attempt.exists({ quizId: quiz._id })) throw new HttpError(409, 'Quiz settings are locked after the quiz goes live or an attempt starts. Close the quiz to stop attempts.');
   const data = checked(settingsSchema, req.body || {});
   if (data.status === 'live' && await Question.countDocuments({ quizId: quiz._id }) < 1) throw new HttpError(409, 'Add at least one valid question before making the quiz live.');
   if (data.status === 'live' && (!data.startAt || !data.endAt)) throw new HttpError(400, 'Set both official start and end times before going live.');
-  Object.assign(quiz, { title: data.title, instructions: data.instructions, startAt: data.startAt, endAt: data.endAt, resultsVisible: data.resultsVisible ?? quiz.resultsVisible });
+  Object.assign(quiz, { title: data.title, instructions: data.instructions, startAt: data.startAt, endAt: data.endAt, durationMinutes: data.durationMinutes, resultsVisible: data.resultsVisible ?? quiz.resultsVisible });
   if (data.status) quiz.status = data.status;
   if (data.status === 'live' || data.status === 'scheduled') quiz.lockedAt = new Date();
   await quiz.save();
-  res.json({ quiz: { title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, locked: Boolean(quiz.lockedAt) } });
+  res.json({ quiz: { title: quiz.title, instructions: quiz.instructions, status: getQuizState(quiz), configuredStatus: quiz.status, startAt: quiz.startAt, endAt: quiz.endAt, durationMinutes: quiz.durationMinutes, locked: Boolean(quiz.lockedAt) } });
 });
 router.post('/quiz/start', async (_req, res) => {
   const quiz = await currentQuiz();
@@ -241,11 +241,40 @@ router.post('/quiz/start', async (_req, res) => {
   if (!quiz.startAt || !quiz.endAt || quiz.endAt <= quiz.startAt) throw new HttpError(409, 'Configure valid official start and end times first.');
   if (quiz.endAt <= new Date()) throw new HttpError(409, 'The configured end time has already passed.');
   quiz.status = quiz.startAt > new Date() ? 'scheduled' : 'live';
+  quiz.pausedAt = null;
   quiz.lockedAt = new Date();
   await quiz.save();
   res.json({ status: getQuizState(quiz), startAt: quiz.startAt, endAt: quiz.endAt });
 });
 router.post('/quiz/close', async (_req, res) => { const quiz = await currentQuiz(); const now = new Date(); quiz.status = 'closed'; quiz.endAt = now; await quiz.save(); await Attempt.updateMany({ quizId: quiz._id, status: 'in_progress' }, { $set: { deadlineAt: now } }); await finalizeExpiredAttempts(now); res.json({ status: 'closed' }); });
+
+router.post('/quiz/pause', async (_req, res) => {
+  const quiz = await currentQuiz();
+  if (!['live', 'scheduled'].includes(quiz.status) || getQuizState(quiz) === 'closed') {
+    throw new HttpError(409, 'Only a scheduled or live quiz can be paused.');
+  }
+  quiz.status = 'paused';
+  quiz.pausedAt = new Date();
+  await quiz.save();
+  res.json({ status: 'paused', pausedAt: quiz.pausedAt });
+});
+
+router.post('/quiz/resume', async (_req, res) => {
+  const quiz = await currentQuiz();
+  const now = new Date();
+  if (quiz.status !== 'paused' || !quiz.pausedAt) throw new HttpError(409, 'The quiz is not paused.');
+  const pauseDurationMs = Math.max(0, now.getTime() - new Date(quiz.pausedAt).getTime());
+  if (pauseDurationMs > 0) {
+    await Attempt.updateMany(
+      { quizId: quiz._id, status: 'in_progress' },
+      [{ $set: { deadlineAt: { $add: ['$deadlineAt', pauseDurationMs] } } }]
+    );
+  }
+  quiz.status = quiz.startAt > now ? 'scheduled' : 'live';
+  quiz.pausedAt = null;
+  await quiz.save();
+  res.json({ status: getQuizState(quiz), startAt: quiz.startAt, endAt: quiz.endAt });
+});
 
 router.post('/quiz/reset', async (_req, res) => {
   const quiz = await currentQuiz();
@@ -272,6 +301,7 @@ router.post('/quiz/reset', async (_req, res) => {
   quiz.status = 'draft';
   quiz.startAt = null;
   quiz.endAt = null;
+  quiz.pausedAt = null;
   quiz.lockedAt = null;
   quiz.resultsVisible = false;
   await quiz.save();
