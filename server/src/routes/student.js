@@ -14,7 +14,7 @@ function answerObject(attempt) {
   const map = attempt.answers instanceof Map ? attempt.answers : new Map(Object.entries(attempt.answers?.toObject?.() || attempt.answers || {}));
   return { answers: Object.fromEntries([...map.entries()].map(([id, value]) => [id, value.selectedOption])), answerRevisions: Object.fromEntries([...map.entries()].map(([id, value]) => [id, value.revision])) };
 }
-function snapshot(attempt) { return attempt.questionSnapshot.map((q) => ({ id: String(q.questionId), prompt: q.prompt, imageUrl: q.imageUrl || null, options: q.options })); }
+function snapshot(attempt) { return attempt.questionSnapshot.map((q) => ({ id: String(q.questionId), prompt: q.prompt, options: q.options })); }
 router.get('/quiz/current', async (_req, res) => {
   const quiz = await currentQuiz();
   const questionCount = await Question.countDocuments({ quizId: quiz._id });
@@ -25,7 +25,7 @@ router.post('/quiz/attempt/start', async (req, res) => {
   const now = new Date();
   const state = getQuizState(quiz, now);
   if (state !== 'live') throw new HttpError(409, state === 'scheduled' ? 'The quiz has not started yet.' : 'The quiz is not accepting new attempts.');
-  const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).select('_id prompt imageUrl options').lean();
+  const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).select('_id prompt options').lean();
   if (!questions.length) throw new HttpError(409, 'This quiz is not ready yet.');
   const startNow = new Date();
   if (getQuizState(quiz, startNow) !== 'live') throw new HttpError(409, 'The quiz is no longer accepting new attempts.');
@@ -33,7 +33,7 @@ router.post('/quiz/attempt/start', async (req, res) => {
   if (deadlineAt <= now) throw new HttpError(409, 'The quiz has closed.');
   let attempt;
   try {
-    attempt = await Attempt.create({ quizId: quiz._id, studentId: req.auth.id, status: 'in_progress', answers: {}, questionSnapshot: questions.map((q) => ({ questionId: q._id, prompt: q.prompt, imageUrl: q.imageUrl || null, options: q.options })), totalQuestions: questions.length, startedAt: startNow, deadlineAt });
+    attempt = await Attempt.create({ quizId: quiz._id, studentId: req.auth.id, status: 'in_progress', answers: {}, questionSnapshot: questions.map((q) => ({ questionId: q._id, prompt: q.prompt, options: q.options })), totalQuestions: questions.length, startedAt: startNow, deadlineAt });
   } catch (error) {
     if (error?.code !== 11000) throw error;
     attempt = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id }).select('+questionSnapshot');
