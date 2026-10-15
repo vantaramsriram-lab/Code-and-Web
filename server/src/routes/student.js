@@ -18,7 +18,7 @@ function snapshot(attempt) { return attempt.questionSnapshot.map((q) => ({ id: S
 router.get('/quiz/current', async (_req, res) => {
   const quiz = await currentQuiz();
   const questionCount = await Question.countDocuments({ quizId: quiz._id });
-  res.json({ title: quiz.title, instructions: quiz.instructions, state: getQuizState(quiz), startAt: quiz.startAt, endAt: quiz.endAt, questionCount });
+  res.json({ title: quiz.title, instructions: quiz.instructions, state: getQuizState(quiz), startAt: quiz.startAt, endAt: quiz.endAt, durationMinutes: quiz.durationMinutes, questionCount });
 });
 router.post('/quiz/attempt/start', async (req, res) => {
   const quiz = await currentQuiz();
@@ -27,7 +27,7 @@ router.post('/quiz/attempt/start', async (req, res) => {
   if (state !== 'live') throw new HttpError(409, state === 'scheduled' ? 'The quiz has not started yet.' : 'The quiz is not accepting new attempts.');
   const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).select('_id prompt options').lean();
   if (!questions.length) throw new HttpError(409, 'This quiz is not ready yet.');
-  const deadlineAt = new Date(quiz.endAt);
+  const deadlineAt = new Date(now.getTime() + quiz.durationMinutes * 60 * 1000);
   if (deadlineAt <= now) throw new HttpError(409, 'The quiz has closed.');
   let attempt;
   try {
@@ -63,6 +63,8 @@ router.put('/quiz/attempt/:attemptId/answer', async (req, res) => {
   let attempt = await Attempt.findOne({ _id: attemptId, studentId: req.auth.id }).select('+questionSnapshot');
   if (!attempt) throw new HttpError(404, 'Attempt not found.');
   if (attempt.status !== 'in_progress') throw new HttpError(409, 'This attempt is already finalized.');
+  const activeQuiz = await currentQuiz();
+  if (activeQuiz.status === 'paused') throw new HttpError(409, 'The quiz is paused. Your timer will resume when the administrator resumes the quiz.');
   if (new Date() >= attempt.deadlineAt) { await finalizeAttempt(attempt._id, 'expired'); throw new HttpError(409, 'The quiz deadline has passed.'); }
   const question = attempt.questionSnapshot.find((q) => String(q.questionId) === questionId);
   if (!question || selectedOption < 0 || selectedOption >= question.options.length) throw new HttpError(400, 'Invalid question or answer option.');
@@ -94,6 +96,8 @@ router.post('/quiz/attempt/:attemptId/submit', async (req, res) => {
   if (!idOk(req.params.attemptId)) throw new HttpError(400, 'Invalid attempt.');
   const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.auth.id });
   if (!attempt) throw new HttpError(404, 'Attempt not found.');
+  const activeQuiz = await currentQuiz();
+  if (activeQuiz.status === 'paused') throw new HttpError(409, 'The quiz is paused. You can submit after the administrator resumes it.');
   const finalStatus = new Date() >= attempt.deadlineAt ? 'expired' : 'submitted';
   const finished = await finalizeAttempt(attempt._id, finalStatus);
   res.json({ message: 'Your quiz has been submitted successfully. Your responses have been recorded. Thank you for participating.', status: finished?.status || finalStatus, submittedAt: finished?.submittedAt, reference: String(attempt._id).slice(-8).toUpperCase() });
