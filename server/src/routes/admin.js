@@ -187,7 +187,7 @@ router.post('/students/import', (req, res, next) => upload.single('file')(req, r
   const failuresCsv = makeFailureCsv(summary.failures);
   res.json({ preview: false, summary: { totalRowsProcessed: summary.totalRows, successfullyImported: imported, duplicateRowsSkipped: summary.duplicateSkipped, invalidRowsRejected: summary.invalidRejected, existingRecordsSkipped: summary.existingSkipped }, failureCount: summary.failures.length, failuresCsv });
 });
-router.get('/questions', async (_req, res) => { const quiz = await currentQuiz(); const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).lean(); res.json({ questions: questions.map((q) => ({ id: String(q._id), prompt: q.prompt, options: q.options, correctOption: q.correctOption, order: q.order })) }); });
+router.get('/questions', async (_req, res) => { const quiz = await currentQuiz(); const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).lean(); res.json({ questions: questions.map((q) => ({ id: String(q._id), prompt: q.prompt, imageUrl: q.imageUrl || null, options: q.options, correctOption: q.correctOption, order: q.order })) }); });
 router.post('/questions', async (req, res) => {
   const quiz = await currentQuiz(); await assertQuestionsEditable(quiz);
   const data = checked(questionSchema, req.body || {});
