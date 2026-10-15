@@ -194,7 +194,7 @@ router.post('/questions', async (req, res) => {
   const lastQuestion = await Question.findOne({ quizId: quiz._id }).sort({ order: -1 }).select('order').lean();
   const order = data.order ?? ((lastQuestion?.order ?? -1) + 1);
   const question = await Question.create({ ...data, order, quizId: quiz._id });
-  res.status(201).json({ question: { id: String(question._id), prompt: question.prompt, options: question.options, correctOption: question.correctOption, order: question.order } });
+  res.status(201).json({ question: { id: String(question._id), prompt: question.prompt, imageUrl: question.imageUrl || null, options: question.options, correctOption: question.correctOption, order: question.order } });
 });
 router.put('/questions/reorder', async (req, res) => {
   const quiz = await currentQuiz(); await assertQuestionsEditable(quiz);
@@ -213,7 +213,7 @@ router.put('/questions/:questionId', async (req, res) => {
   delete data.order;
   const question = await Question.findOneAndUpdate({ _id: req.params.questionId, quizId: quiz._id }, { $set: data }, { new: true, runValidators: true });
   if (!question) throw new HttpError(404, 'Question not found.');
-  res.json({ question: { id: String(question._id), prompt: question.prompt, options: question.options, correctOption: question.correctOption, order: question.order } });
+  res.json({ question: { id: String(question._id), prompt: question.prompt, imageUrl: question.imageUrl || null, options: question.options, correctOption: question.correctOption, order: question.order } });
 });
 router.delete('/questions/:questionId', async (req, res) => {
   const quiz = await currentQuiz(); await assertQuestionsEditable(quiz);
