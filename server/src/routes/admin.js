@@ -263,7 +263,6 @@ router.post('/quiz/resume', async (_req, res) => {
   const quiz = await currentQuiz();
   const now = new Date();
   if (quiz.status !== 'paused' || !quiz.pausedAt) throw new HttpError(409, 'The quiz is not paused.');
-  if (!quiz.endAt || quiz.endAt <= now) throw new HttpError(409, 'The official quiz window has ended. Reset the quiz to start another round.');
   const pauseDurationMs = Math.max(0, now.getTime() - new Date(quiz.pausedAt).getTime());
   if (pauseDurationMs > 0) {
     await Attempt.updateMany(
