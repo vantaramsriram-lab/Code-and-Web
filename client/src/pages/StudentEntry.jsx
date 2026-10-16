@@ -42,7 +42,23 @@ export default function StudentEntry() {
         <div className="eyebrow"><Sparkles size={16}/> SPARK CLUB · THINK SHARP</div>
         <h1>Ready to<br/><span>spark?</span></h1>
         <p className="lead">A little curiosity goes a long way. Sign in with your registered scholar number and take on the Spark Club quiz.</p>
-        <div className="entry-note \"><span className="note-icon flex justify-center items-center"><Clock3 size={20}/></span><div><b>{quiz?.title || 'Spark Club Quiz'}</b><span>{quiz?.state === 'live' ? 'The quiz is live now.' : quiz?.state === 'scheduled' ? `Starts ${formatIst(quiz?.startAt)}.` : quiz?.state === 'closed' ? 'This quiz is now closed.' : 'Your quiz schedule will appear here.'}</span></div></div>
+        <div className="entry-note">
+          <span className="note-icon flex items-center justify-center">
+            <Clock3 size={20} />
+          </span>
+        <div>
+          <b>{quiz?.title || 'Spark Club Quiz'}</b>
+          <span>
+            {quiz?.state === 'live'
+              ? 'The quiz is live now.'
+              : quiz?.state === 'scheduled'
+              ? `Starts ${formatIst(quiz?.startAt)}.`
+              : quiz?.state === 'closed'
+               ? 'This quiz is now closed.'
+              : 'Your quiz schedule will appear here.'}
+        </span>
+      </div>
+      </div>
         <div className="privacy-note"><ShieldCheck size={18}/><span>One attempt per student. Your identity is checked against the club’s active student list.</span></div>
       </div>
       <div className="entry-card">
@@ -50,7 +66,7 @@ export default function StudentEntry() {
         <h2>Let’s get started.</h2><p className="muted">Use the scholar number registered with Spark Club.</p>
         <form onSubmit={submit} noValidate>
           <label htmlFor="scholarNumber">Scholar number</label>
-          <input id="scholarNumber" name="scholarNumber" autoComplete="username" inputMode="text" value={scholarNumber} onChange={(e) => setScholarNumber(e.target.value)} placeholder="e.g. 240001" maxLength={40} required />
+          <input id="scholarNumber" name="scholarNumber" autoComplete="username" inputMode="text" value={scholarNumber} onChange={(e) => setScholarNumber(e.target.value)} placeholder="e.g. 26U020000" maxLength={40} required />
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           <button className="button button-primary button-wide" type="submit" disabled={busy}>{busy ? 'Checking…' : <>Continue to quiz <ArrowRight size={18}/></>}</button>
         </form>
