@@ -104,13 +104,9 @@ router.post('/quiz/attempt/:attemptId/submit', async (req, res) => {
   const finished = await finalizeAttempt(attempt._id, finalStatus);
   res.json({ message: 'Your quiz has been submitted successfully. Your responses have been recorded. Thank you for participating.', status: finished?.status || finalStatus, submittedAt: finished?.submittedAt, reference: String(attempt._id).slice(-8).toUpperCase() });
 });
-router.post('/quiz/attempt/:attemptId/violation', async (req, res) => {
-  if (!idOk(req.params.attemptId)) throw new HttpError(400, 'Invalid attempt.');
-  const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.auth.id });
-  if (!attempt) throw new HttpError(404, 'Attempt not found.');
-  const finalStatus = new Date() >= attempt.deadlineAt ? 'expired' : 'auto_submitted';
-  const finished = await finalizeAttempt(attempt._id, finalStatus, 'prohibited_tab_switch');
-  res.json({ message: 'Your attempt has been finalized.', status: finished?.status || finalStatus, submittedAt: finished?.submittedAt });
+// Tab-switch violations no longer auto-submit an attempt. Expiry and student-initiated submit remain unchanged.
+router.post('/quiz/attempt/:attemptId/violation', async (_req, _res) => {
+  throw new HttpError(410, 'Automatic submission on tab switching has been disabled.');
 });
 router.get('/quiz/attempt/:attemptId/confirmation', async (req, res) => {
   if (!idOk(req.params.attemptId)) throw new HttpError(400, 'Invalid attempt.');
