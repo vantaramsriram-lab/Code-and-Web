@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Clock3, LogOut, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Clock3, LogOut, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api.js';
 import Brand from '../components/Brand.jsx';
@@ -12,7 +12,7 @@ export default function QuizPage() {
   const [loading, setLoading] = useState(true); const [student, setStudent] = useState(null); const [quiz, setQuiz] = useState(null); const [attempt, setAttempt] = useState(null);
   const [current, setCurrent] = useState(0); const [answers, setAnswers] = useState({}); const [saveStates, setSaveStates] = useState({}); const [remaining, setRemaining] = useState(null);
   const [dialog, setDialog] = useState(false); const [error, setError] = useState(''); const [confirmation, setConfirmation] = useState(null); const [starting, setStarting] = useState(false);
-  const revisions = useRef({}); const latest = useRef({}); const serverOffset = useRef(0); const violationSent = useRef(false); const expirySent = useRef(false); const lastQuizState = useRef(null);
+  const revisions = useRef({}); const latest = useRef({}); const serverOffset = useRef(0); const expirySent = useRef(false); const lastQuizState = useRef(null);
   const refresh = useCallback(async () => {
     try {
       const session = await api.get('/session');
@@ -51,77 +51,9 @@ export default function QuizPage() {
   }, [attempt?.id, attempt?.status]);
   const finalizeAtTimeout = useCallback(async () => { if (!attempt?.id || expirySent.current) return; expirySent.current = true; try { const result = await api.post(`/quiz/attempt/${attempt.id}/submit`); setConfirmation(result); setAttempt((a) => ({ ...a, status: result.status, submittedAt: result.submittedAt })); } catch (err) { setError(displayError(err)); expirySent.current = false; } }, [attempt?.id]);
   useEffect(() => { if (remaining !== null && remaining <= 0 && attempt?.status === 'in_progress') finalizeAtTimeout(); }, [remaining, attempt?.status, finalizeAtTimeout]);
-
-  useEffect(() => {
-    if (!attempt?.id || attempt.status !== 'in_progress') return;
-
-    let submitTimer = null;
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        if (violationSent.current || submitTimer !== null) return;
-
-        // Delay briefly so a page refresh can cancel this.
-        submitTimer = setTimeout(async () => {
-          submitTimer = null;
-
-          if (
-            document.visibilityState !== 'hidden' ||
-            violationSent.current
-          ) return;
-
-          violationSent.current = true;
-
-          try {
-            const result = await api.post(
-              `/quiz/attempt/${attempt.id}/violation`
-            );
-
-            setConfirmation(result);
-            setAttempt((a) => ({
-              ...a,
-              status: result.status,
-              submittedAt: result.submittedAt
-            }));
-          } catch (err) {
-            setError(
-              `Tab-switch policy could not be confirmed: ${displayError(err)}`
-            );
-            violationSent.current = false;
-          }
-        }, 1000);
-      } else {
-        // The student returned to the quiz; cancel pending submission.
-        if (submitTimer !== null) {
-          clearTimeout(submitTimer);
-          submitTimer = null;
-        }
-      }
-    };
-
-    const onPageHide = () => {
-      // Refresh/navigation should not trigger tab-switch submission.
-      if (submitTimer !== null) {
-        clearTimeout(submitTimer);
-        submitTimer = null;
-      }
-    };
-
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', onPageHide);
-
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', onPageHide);
-
-      if (submitTimer !== null) {
-        clearTimeout(submitTimer);
-      }
-    };
-  }, [attempt?.id, attempt?.status]);
   async function startAttempt() {
     setStarting(true); setError('');
-    try { const result = await api.post('/quiz/attempt/start'); if (result.attempt.serverNow) serverOffset.current = new Date(result.attempt.serverNow).getTime() - Date.now(); setAttempt(result.attempt); setAnswers(result.attempt.answers || {}); setCurrent(0); revisions.current = {}; latest.current = {}; violationSent.current = false; expirySent.current = false; }
+    try { const result = await api.post('/quiz/attempt/start'); if (result.attempt.serverNow) serverOffset.current = new Date(result.attempt.serverNow).getTime() - Date.now(); setAttempt(result.attempt); setAnswers(result.attempt.answers || {}); setCurrent(0); revisions.current = {}; latest.current = {}; expirySent.current = false; }
     catch (err) { setError(displayError(err)); await refresh(); }
     finally { setStarting(false); }
   }
@@ -148,7 +80,7 @@ export default function QuizPage() {
   const isActive = attempt?.status === 'in_progress' && !confirmation;
   if (confirmation) return <main className="center-page"><section className="confirmation-card"><Brand /><div className="confirm-mark"><Check size={36} /></div><div className="eyebrow">RESPONSE RECORDED</div><h1>Your quiz is complete.</h1><p className="lead">Your quiz has been submitted successfully. Your responses have been recorded. Thank you for participating.</p><div className="confirmation-meta"><span>Submitted</span><b>{formatIst(confirmation.submittedAt)}</b></div><div className="confirmation-meta"><span>Reference</span><b>{confirmation.reference || '—'}</b></div><p className="small-note">Your result is not shown here. Thank you for taking part in Spark Club.</p><button className="button button-outline" onClick={logout}><LogOut size={17} /> Sign out</button></section></main>;
   if (attempt && attempt.status !== 'in_progress') return <main className="center-page"><section className="confirmation-card"><Brand /><div className="eyebrow">ATTEMPT CLOSED</div><h1>This attempt is finalized.</h1><p className="lead">Your responses have been recorded. Thank you for participating.</p><button className="button button-outline" onClick={logout}><LogOut size={17} /> Sign out</button></section></main>;
-  if (!attempt) return <main className="entry-page"><header className="topbar"><Brand /><button className="button button-ghost" onClick={logout}><LogOut size={16} /> Sign out</button></header><section className="start-card"><div className="eyebrow">WELCOME, {student?.name?.toUpperCase() || 'STUDENT'}</div><h1>{quiz?.title || 'Spark Club Quiz'}</h1><p className="lead">{quiz?.instructions}</p><div className="start-details"><div><span>Quiz status</span><StatusBadge status={quiz?.state} /></div><div><span>Questions</span><b>{quiz?.questionCount ?? '—'}</b></div><div><span>Closes</span><b>{formatIst(quiz?.endAt)}</b></div></div>{error && <div className="alert alert-error" role="alert">{error}</div>}{quiz?.state === 'live' ? <button className="button button-primary" onClick={startAttempt} disabled={starting}>{starting ? 'Starting…' : <>Start quiz <ArrowRight size={18} /></>}</button> : <p className="muted">{quiz?.state === 'scheduled' ? `The quiz opens at ${formatIst(quiz?.startAt)}. Refresh this page when it begins.` : quiz?.state === 'closed' ? 'The quiz is closed and is no longer accepting attempts.' : 'The quiz has not been scheduled yet. Check back later.'}</p>}<p className="small-note">One attempt only. The countdown starts when you begin your attempt and uses the server deadline. Switching away from the quiz may finalize your attempt.</p></section></main>;
+  if (!attempt) return <main className="entry-page"><header className="topbar"><Brand /><button className="button button-ghost" onClick={logout}><LogOut size={16} /> Sign out</button></header><section className="start-card"><div className="eyebrow">WELCOME, {student?.name?.toUpperCase() || 'STUDENT'}</div><h1>{quiz?.title || 'Spark Club Quiz'}</h1><p className="lead">{quiz?.instructions}</p><div className="start-details"><div><span>Quiz status</span><StatusBadge status={quiz?.state} /></div><div><span>Questions</span><b>{quiz?.questionCount ?? '—'}</b></div><div><span>Closes</span><b>{formatIst(quiz?.endAt)}</b></div></div>{error && <div className="alert alert-error" role="alert">{error}</div>}{quiz?.state === 'live' ? <button className="button button-primary" onClick={startAttempt} disabled={starting}>{starting ? 'Starting…' : <>Start quiz <ArrowRight size={18} /></>}</button> : <p className="muted">{quiz?.state === 'scheduled' ? `The quiz opens at ${formatIst(quiz?.startAt)}. Refresh this page when it begins.` : quiz?.state === 'closed' ? 'The quiz is closed and is no longer accepting attempts.' : 'The quiz has not been scheduled yet. Check back later.'}</p>}<p className="small-note">One attempt only. The countdown starts when you begin your attempt and uses the server deadline.</p></section></main>;
   if (!isActive) return <main className="center-page"><Loading text="Finishing your attempt…" /></main>;
   const question = questions[current]; const saveState = saveStates[question?.id]; const remainingText = timerText(remaining ?? 0);
   return <main className="quiz-shell" onContextMenu={(e) => e.preventDefault()} onCopy={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
