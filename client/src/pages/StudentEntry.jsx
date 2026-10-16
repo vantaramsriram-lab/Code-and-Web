@@ -44,7 +44,7 @@ export default function StudentEntry() {
         <p className="lead">A little curiosity goes a long way. Sign in with your registered scholar number and take on the Spark Club quiz.</p>
         <div className="entry-note">
           <span className="note-icon flex items-center justify-center">
-            <Clock3 size={20} />
+            <Clock3 size={20}  className="mt-1"/>
           </span>
         <div>
           <b>{quiz?.title || 'Spark Club Quiz'}</b>
