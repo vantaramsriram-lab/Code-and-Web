@@ -102,7 +102,7 @@ test('auth, admin protections, quiz answer persistence, submission privacy, CSV 
 
     const afterViolation = await Attempt.findById(body.attempt.id);
     assert.equal(afterViolation.status, 'in_progress');
-    assert.equal(afterViolation.violationReason, undefined);
+    assert.equal(afterViolation.violationReason, null);
 
     // A tab switch must not prevent the student from continuing and saving answers.
     await agent.put(`/api/quiz/attempt/${body.attempt.id}/answer`)
