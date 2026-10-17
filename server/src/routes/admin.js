@@ -41,12 +41,12 @@ async function resultRows(quiz, query, includeAll = false) {
   ]);
   const attempts = facet?.data || [];
   const total = facet?.total?.[0]?.value || 0;
-  return { rows: attempts.map((a) => ({ id: String(a._id), studentName: a.student.name, scholarNumber: a.student.scholarNumber, attemptNumber: a.attemptNumber ?? 1, correctAnswers: a.score, totalQuestions: a.totalQuestions, percentage: a.score == null || !a.totalQuestions ? null : Math.round(a.score / a.totalQuestions * 10000) / 100, status: statusLabel(a.status), submittedAt: a.submittedAt, startedAt: a.startedAt, countedForLeaderboard: Boolean(a.countedForLeaderboard), retakeApprovedAt: a.retakeApprovedAt || null, retakeConsumedAt: a.retakeConsumedAt || null, canAllowRetake: ['submitted', 'expired'].includes(a.status) && !(a.retakeApprovedAt && !a.retakeConsumedAt) })), page, limit, total, pages: Math.ceil(total / limit) };
+  return { rows: attempts.map((a) => ({ id: String(a._id), studentName: a.student.name, scholarNumber: a.student.scholarNumber, correctAnswers: a.score, totalQuestions: a.totalQuestions, percentage: a.score == null || !a.totalQuestions ? null : Math.round(a.score / a.totalQuestions * 10000) / 100, status: statusLabel(a.status), submittedAt: a.submittedAt, startedAt: a.startedAt, canAllowRetake: ['submitted', 'expired', 'auto_submitted'].includes(a.status) })), page, limit, total, pages: Math.ceil(total / limit) };
 }
 async function resultStats(quiz) {
   const totalStudents = await Student.countDocuments({});
   const attemptedIds = await Attempt.distinct('studentId', { quizId: quiz._id });
-  const final = await Attempt.aggregate([{ $match: { quizId: quiz._id, countedForLeaderboard: true, status: { $in: ['submitted', 'auto_submitted', 'expired'] }, score: { $ne: null } } }, { $group: { _id: null, attempts: { $sum: 1 }, averageScore: { $avg: '$score' }, highestScore: { $max: '$score' }, lowestScore: { $min: '$score' } } }]);
+  const final = await Attempt.aggregate([{ $match: { quizId: quiz._id, status: { $in: ['submitted', 'auto_submitted', 'expired'] }, score: { $ne: null } } }, { $group: { _id: null, attempts: { $sum: 1 }, averageScore: { $avg: '$score' }, highestScore: { $max: '$score' }, lowestScore: { $min: '$score' } } }]);
   const stat = final[0] || { attempts: 0, averageScore: 0, highestScore: null, lowestScore: null };
   return { totalRegisteredStudents: totalStudents, studentsAttempted: attemptedIds.length, submittedAttempts: stat.attempts, notAttempted: Math.max(0, totalStudents - attemptedIds.length), averageScore: Math.round((stat.averageScore || 0) * 100) / 100, highestScore: stat.highestScore, lowestScore: stat.lowestScore };
 }
@@ -313,39 +313,18 @@ router.post('/quiz/reset', async (_req, res) => {
 });
 
 router.get('/results', async (req, res) => { const quiz = await currentQuiz(); const [result, stats] = await Promise.all([resultRows(quiz, req.query), resultStats(quiz)]); res.json({ ...result, stats }); });
-router.post('/results/:attemptId/allow-retake', async (req, res) => {
-  const { attemptId } = req.params;
-  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) : '';
-  if (!objectId(attemptId)) throw new HttpError(400, 'Invalid attempt id.');
-  if (!reason) throw new HttpError(400, 'Provide a reason for approving this retake.');
-  const quiz = await currentQuiz();
-  const attempt = await Attempt.findOne({ _id: attemptId, quizId: quiz._id });
-  if (!attempt) throw new HttpError(404, 'Attempt not found.');
-  if (!['submitted', 'expired'].includes(attempt.status)) throw new HttpError(409, 'Only submitted or expired attempts can be approved for a retake.');
-  if (attempt.retakeConsumedAt) throw new HttpError(409, 'This retake approval has already been used.');
-  attempt.retakeApprovedAt = new Date();
-  attempt.retakeApprovedBy = req.auth.id;
-  attempt.retakeReason = reason;
-  await attempt.save();
-  res.json({ ok: true, attemptId: String(attempt._id), retakeApprovedAt: attempt.retakeApprovedAt, message: 'Retake approved. The student can start a new attempt while the quiz is live.' });
-});
-
-router.post('/results/:attemptId/count-for-leaderboard', async (req, res) => {
+router.post('/results/:attemptId/retake', async (req, res) => {
   const { attemptId } = req.params;
   if (!objectId(attemptId)) throw new HttpError(400, 'Invalid attempt id.');
   const quiz = await currentQuiz();
   const attempt = await Attempt.findOne({ _id: attemptId, quizId: quiz._id });
   if (!attempt) throw new HttpError(404, 'Attempt not found.');
-  if (!['submitted', 'expired', 'auto_submitted'].includes(attempt.status)) throw new HttpError(409, 'Only completed attempts can count toward the leaderboard.');
-  await Attempt.updateMany({ quizId: quiz._id, studentId: attempt.studentId, _id: mongoose.trusted({ $ne: attempt._id }) }, { $set: { countedForLeaderboard: false } });
-  try {
-    attempt.countedForLeaderboard = true;
-    await attempt.save();
-  } catch (error) {
-    if (error?.code === 11000) throw new HttpError(409, 'Another attempt was selected for this student. Refresh the results and try again.');
-    throw error;
+  if (!['submitted', 'expired', 'auto_submitted'].includes(attempt.status)) {
+    throw new HttpError(409, 'Only a completed attempt can be reset for a retake.');
   }
-  res.json({ ok: true, attemptId: String(attempt._id), countedForLeaderboard: true });
+  // The product policy is to keep one attempt only: delete the old answers and result.
+  await Attempt.deleteOne({ _id: attempt._id, quizId: quiz._id, status: attempt.status });
+  res.json({ ok: true, message: 'Previous attempt and result deleted. The student can start again while the quiz is live.' });
 });
 
 router.get('/results/export', async (req, res) => {
