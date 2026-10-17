@@ -4,8 +4,8 @@ const snapshotSchema = new mongoose.Schema({ questionId: { type: mongoose.Schema
 const attemptSchema = new mongoose.Schema({
   quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
-  status: { type: String, enum: ['in_progress', 'finalizing', 'submitted', 'auto_submitted', 'expired'], default: 'in_progress', index: true },
-  finalizeAs: { type: String, enum: ['submitted', 'auto_submitted', 'expired'], default: null, select: false },
+  status: { type: String, enum: ['in_progress', 'finalizing', 'submitted', 'expired'], default: 'in_progress', index: true },
+  finalizeAs: { type: String, enum: ['submitted', 'expired'], default: null, select: false },
   answers: { type: Map, of: answerSchema, default: {} },
   questionSnapshot: { type: [snapshotSchema], required: true, select: false },
   score: { type: Number, default: null },
