@@ -10,7 +10,7 @@ function timerText(ms) { const seconds = Math.max(0, Math.floor(ms / 1000)); ret
 export default function QuizPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true); const [student, setStudent] = useState(null); const [quiz, setQuiz] = useState(null); const [attempt, setAttempt] = useState(null);
-  const [current, setCurrent] = useState(0); const [answers, setAnswers] = useState({}); const [saveStates, setSaveStates] = useState({}); const [remaining, setRemaining] = useState(null);
+  const [current, setCurrent] = useState(0); const [answers, setAnswers] = useState({}); const [saveStates, setSaveStates] = useState({}); const saveStatesRef = useRef({}); const [remaining, setRemaining] = useState(null);
   const [dialog, setDialog] = useState(false); const [error, setError] = useState(''); const [confirmation, setConfirmation] = useState(null); const [starting, setStarting] = useState(false);
   const revisions = useRef({}); const latest = useRef({}); const pendingSaves = useRef(new Map()); const serverOffset = useRef(0); const expirySent = useRef(false); const lastQuizState = useRef(null);
   const refresh = useCallback(async () => {
@@ -79,7 +79,7 @@ export default function QuizPage() {
   useEffect(() => { if (remaining !== null && remaining <= 0 && attempt?.status === 'in_progress') finalizeAtTimeout(); }, [remaining, attempt?.status, finalizeAtTimeout]);
   async function startAttempt() {
     setStarting(true); setError('');
-    try { const result = await api.post('/quiz/attempt/start'); if (result.attempt.serverNow) serverOffset.current = new Date(result.attempt.serverNow).getTime() - Date.now(); setAttempt(result.attempt); setAnswers(result.attempt.answers || {}); setSaveStates({}); setCurrent(0); revisions.current = {}; latest.current = {}; expirySent.current = false; }
+    try { const result = await api.post('/quiz/attempt/start'); if (result.attempt.serverNow) serverOffset.current = new Date(result.attempt.serverNow).getTime() - Date.now(); setAttempt(result.attempt); setAnswers(result.attempt.answers || {}); setSaveStates({}); saveStatesRef.current = {}; setCurrent(0); revisions.current = {}; latest.current = {}; expirySent.current = false; }
     catch (err) { setError(displayError(err)); await refresh(); }
     finally { setStarting(false); }
   }
@@ -91,7 +91,7 @@ export default function QuizPage() {
     revisions.current[qid] = revision;
     latest.current[qid] = { option, revision };
     setAnswers((old) => ({ ...old, [qid]: option }));
-    setSaveStates((old) => ({ ...old, [qid]: { status: 'saving', revision } }));
+    setSaveStates((old) => { const next = { ...old, [qid]: { status: 'saving', revision } }; saveStatesRef.current = next; return next; });
 
     const key = `${attemptId}:${qid}:${revision}`;
     const request = (async () => {
@@ -99,12 +99,12 @@ export default function QuizPage() {
         const saved = await api.put(`/quiz/attempt/${attemptId}/answer`, { questionId: qid, selectedOption: option, revision });
         if (attemptId === attempt.id && revisions.current[qid] === revision) {
           setAnswers((old) => ({ ...old, [qid]: saved.selectedOption }));
-          setSaveStates((old) => ({ ...old, [qid]: { status: 'saved', revision } }));
+          setSaveStates((old) => { const next = { ...old, [qid]: { status: 'saved', revision } }; saveStatesRef.current = next; return next; });
         }
       } catch (err) {
         if (revisions.current[qid] === revision) {
           const message = displayError(err);
-          setSaveStates((old) => ({ ...old, [qid]: { status: 'error', revision, message } }));
+          setSaveStates((old) => { const next = { ...old, [qid]: { status: 'error', revision, message } }; saveStatesRef.current = next; return next; });
           if (/already finalized|already finalised|attempt.*finalized/i.test(message)) {
             try {
               const restored = await api.get('/quiz/attempt/current');
@@ -131,7 +131,7 @@ export default function QuizPage() {
       .filter(([key]) => key.startsWith(`${attemptId}:`))
       .map(([, promise]) => promise);
     await Promise.allSettled(pending);
-    if (Object.values(saveStates).some((s) => s.status === 'saving' || s.status === 'error')) {
+    if (Object.values(saveStatesRef.current).some((s) => s.status === 'saving' || s.status === 'error')) {
       setError('Wait for every answer to save, or retry a failed save, before submitting.');
       return;
     }
