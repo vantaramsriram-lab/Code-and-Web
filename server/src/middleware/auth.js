@@ -18,4 +18,4 @@ export async function requireAuth(req, _res, next) {
     next();
   } catch (error) { next(error instanceof HttpError ? error : new HttpError(401, 'Session expired. Please sign in again.')); }
 }
-export function requireRole(role) { return (req, _res, next) => req.auth?.role === role ? next() : next(new HttpError(403, 'You do not have permission to access this resource.')); }
+export function requireRole(role) { return (req, _res, next) => req.auth?.role === role ? next() : next(new HttpError(403, `You do not have permission to access this resource. ${req.auth?.role}`)); }
