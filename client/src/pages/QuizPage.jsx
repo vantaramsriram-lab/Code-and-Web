@@ -11,7 +11,7 @@ export default function QuizPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true); const [student, setStudent] = useState(null); const [quiz, setQuiz] = useState(null); const [attempt, setAttempt] = useState(null);
   const [current, setCurrent] = useState(0); const [answers, setAnswers] = useState({}); const [saveStates, setSaveStates] = useState({}); const [remaining, setRemaining] = useState(null);
-  const [dialog, setDialog] = useState(false); const [error, setError] = useState(''); const [confirmation, setConfirmation] = useState(null); const [starting, setStarting] = useState(false);
+  const [dialog, setDialog] = useState(false); const [error, setError] = useState(''); const [confirmation, setConfirmation] = useState(null); const [starting, setStarting] = useState(false); const [privacyShield, setPrivacyShield] = useState(false);
   const revisions = useRef({}); const latest = useRef({}); const serverOffset = useRef(0); const expirySent = useRef(false); const lastQuizState = useRef(null);
   const refresh = useCallback(async () => {
     try {
@@ -27,6 +27,23 @@ export default function QuizPage() {
     finally { setLoading(false); }
   }, [navigate]);
   useEffect(() => { refresh(); }, [refresh]);
+  // Best-effort privacy shield: obscure the quiz while the browser tab is hidden
+  // or the window loses focus. Browsers do not expose a reliable screenshot event.
+  useEffect(() => {
+    if (attempt?.status !== 'in_progress' || confirmation) { setPrivacyShield(false); return; }
+    const onBlur = () => setPrivacyShield(true);
+    const onFocus = () => { if (!document.hidden) setPrivacyShield(false); };
+    const onVisibilityChange = () => setPrivacyShield(document.hidden || !document.hasFocus());
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onVisibilityChange();
+    return () => {
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [attempt?.status, confirmation]);
   useEffect(() => { if (!attempt?.deadlineAt || attempt.status !== 'in_progress' || quiz?.state === 'paused') return; const tick = () => setRemaining(new Date(attempt.deadlineAt).getTime() - (Date.now() + serverOffset.current)); tick(); const id = setInterval(tick, 1000); return () => clearInterval(id); }, [attempt?.deadlineAt, attempt?.status, quiz?.state]);
   useEffect(() => {
     if (!attempt?.id || attempt.status !== 'in_progress') return;
@@ -92,5 +109,6 @@ export default function QuizPage() {
     </div><footer className="quiz-footer"><span>✦ Think clearly. Trust your spark.</span><button className="button button-primary" disabled={quiz?.state === 'paused'} onClick={() => setDialog(true)}><Check size={17} /> Submit quiz</button></footer>
     {error && <div className="toast-error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
     {dialog && <div className="modal-backdrop" role="presentation"><section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="submit-title"><div className="eyebrow">FINAL CHECK</div><h2 id="submit-title">Submit your quiz?</h2><p>Your submission is final. You have answered {answeredCount} of {questions.length} questions. Unanswered questions will receive no response.</p><div className="modal-actions"><button className="button button-outline" onClick={() => setDialog(false)}>Keep checking</button><button className="button button-primary" onClick={submitFinal}>Submit</button></div></section></div>}
+    {privacyShield && <div role="status" aria-live="polite" style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#000', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem' }}><div><h2 style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>Quiz content hidden</h2><p style={{ color: '#ccc' }}>Return to the quiz window to continue.</p></div></div>}
   </main>;
 }
