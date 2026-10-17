@@ -12,7 +12,8 @@
     "csv:testdata": "node scripts/generateTestCsv.js",
     "create-admin": "node scripts/createAdmin.js",
     "load:local": "node scripts/loadTest.js",
-    "db:indexes": "node scripts/createIndexes.js"
+    "db:indexes": "node scripts/createIndexes.js",
+    "db:migrate-retakes": "node scripts/migrateRetakes.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
