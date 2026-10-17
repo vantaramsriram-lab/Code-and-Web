@@ -26,12 +26,14 @@ router.post('/quiz/attempt/start', async (req, res) => {
   const state = getQuizState(quiz, now);
   if (state !== 'live') throw new HttpError(409, state === 'scheduled' ? 'The quiz has not started yet.' : 'The quiz is not accepting new attempts.');
 
-  let previous = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id }).sort({ attemptNumber: -1, createdAt: -1 }).select('+questionSnapshot +finalizeAs');
+  let previous = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id }).sort({ createdAt: -1 }).select('+questionSnapshot +finalizeAs');
   if (previous?.status === 'in_progress' && previous.deadlineAt <= now && quiz.status !== 'paused') previous = await finalizeAttempt(previous._id, 'expired');
   if (previous?.status === 'finalizing') previous = await finalizeAttempt(previous._id, previous.finalizeAs || (previous.deadlineAt <= now ? 'expired' : 'submitted'));
   if (previous?.status === 'in_progress' && previous.deadlineAt > now) {
     return res.json({ attempt: { id: String(previous._id), status: previous.status, deadlineAt: previous.deadlineAt, serverNow: new Date(), questions: snapshot(previous), ...answerObject(previous) } });
   }
+
+  if (previous) throw new HttpError(409, 'You have already used your attempt. Ask an administrator to clear it for a retake.');
 
   const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).select('_id prompt options').lean();
   if (!questions.length) throw new HttpError(409, 'This quiz is not ready yet.');
