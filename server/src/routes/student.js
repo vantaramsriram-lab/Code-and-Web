@@ -76,10 +76,10 @@ router.post('/quiz/attempt/start', async (req, res) => {
 router.get('/quiz/attempt/current', async (req, res) => {
   const quiz = await currentQuiz();
   let attempt = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id }).sort({ attemptNumber: -1, createdAt: -1 }).select('+questionSnapshot +finalizeAs');
-  if (!attempt) return res.json({ attempt: null, serverNow: new Date() });
+  if (!attempt) return res.json({ attempt: null, retakeAvailable: false, serverNow: new Date() });
   if (attempt.status === 'in_progress' && quiz.status !== 'paused' && attempt.deadlineAt <= new Date()) attempt = await finalizeAttempt(attempt._id, 'expired');
   if (attempt.status === 'finalizing') attempt = await finalizeAttempt(attempt._id, attempt.violationReason ? 'auto_submitted' : attempt.deadlineAt <= new Date() ? 'expired' : 'submitted');
-  res.json({ attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, submittedAt: attempt.submittedAt, serverNow: new Date(), questions: snapshot(attempt), ...answerObject(attempt) } });
+  const retakeAvailable = ['submitted', 'expired'].includes(attempt.status) && Boolean(await Attempt.exists({ quizId: quiz._id, studentId: req.auth.id, status: { $in: ['submitted', 'expired'] }, retakeApprovedAt: { $ne: null }, retakeConsumedAt: null }));\n  res.json({ retakeAvailable, attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, submittedAt: attempt.submittedAt, serverNow: new Date(), questions: snapshot(attempt), ...answerObject(attempt) } });
 });
 router.put('/quiz/attempt/:attemptId/answer', async (req, res) => {
   const { attemptId } = req.params;
