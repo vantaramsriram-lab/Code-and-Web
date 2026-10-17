@@ -33,27 +33,16 @@ router.post('/quiz/attempt/start', async (req, res) => {
     return res.json({ attempt: { id: String(previous._id), status: previous.status, deadlineAt: previous.deadlineAt, serverNow: new Date(), questions: snapshot(previous), ...answerObject(previous) } });
   }
 
-  let approvedAttempt = null;
-  if (previous) {
-    approvedAttempt = await Attempt.findOne({
-      quizId: quiz._id, studentId: req.auth.id, status: { $in: ['submitted', 'expired'] },
-      retakeApprovedAt: { $ne: null }, retakeConsumedAt: null
-    }).sort({ retakeApprovedAt: -1, attemptNumber: -1 });
-    if (!approvedAttempt) throw new HttpError(409, 'You have already used your attempt. Ask an administrator to approve a retake.');
-  }
-
   const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 }).select('_id prompt options').lean();
   if (!questions.length) throw new HttpError(409, 'This quiz is not ready yet.');
   const startNow = new Date();
   if (getQuizState(quiz, startNow) !== 'live') throw new HttpError(409, 'The quiz is no longer accepting new attempts.');
   const deadlineAt = new Date(startNow.getTime() + quiz.durationMinutes * 60 * 1000);
   if (deadlineAt <= startNow) throw new HttpError(409, 'The quiz has closed.');
-  const attemptNumber = await Attempt.countDocuments({ quizId: quiz._id, studentId: req.auth.id }) + 1;
   let attempt;
   try {
     attempt = await Attempt.create({
-      quizId: quiz._id, studentId: req.auth.id, attemptNumber,
-      countedForLeaderboard: attemptNumber === 1, status: 'in_progress', answers: {},
+      quizId: quiz._id, studentId: req.auth.id, status: 'in_progress', answers: {},
       questionSnapshot: questions.map((q) => ({ questionId: q._id, prompt: q.prompt, options: q.options })),
       totalQuestions: questions.length, startedAt: startNow, deadlineAt
     });
@@ -61,14 +50,7 @@ router.post('/quiz/attempt/start', async (req, res) => {
     if (error?.code !== 11000) throw error;
     const active = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id, status: mongoose.trusted({ $in: ['in_progress', 'finalizing'] }) }).sort({ createdAt: -1 }).select('+questionSnapshot');
     if (active?.status === 'in_progress' && active.deadlineAt > now) return res.json({ attempt: { id: String(active._id), status: active.status, deadlineAt: active.deadlineAt, serverNow: new Date(), questions: snapshot(active), ...answerObject(active) } });
-    throw new HttpError(409, 'Another attempt is already active or the retake approval was already used.');
-  }
-  if (approvedAttempt) {
-    const consumed = await Attempt.updateOne({ _id: approvedAttempt._id, retakeConsumedAt: null }, { $set: { retakeConsumedAt: startNow } });
-    if (!consumed.modifiedCount) {
-      await Attempt.deleteOne({ _id: attempt._id, status: 'in_progress' });
-      throw new HttpError(409, 'This retake approval has already been used. Ask an administrator to approve another retake.');
-    }
+    throw new HttpError(409, 'Another attempt is already active. Please refresh and try again.');
   }
   if (!quiz.lockedAt) await quiz.updateOne({ _id: quiz._id, lockedAt: null }, { $set: { lockedAt: now }, $inc: { questionVersion: 1 } });
   res.status(201).json({ attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, serverNow: new Date(), questions: snapshot(attempt), answers: {}, answerRevisions: {} } });
@@ -76,11 +58,10 @@ router.post('/quiz/attempt/start', async (req, res) => {
 router.get('/quiz/attempt/current', async (req, res) => {
   const quiz = await currentQuiz();
   let attempt = await Attempt.findOne({ quizId: quiz._id, studentId: req.auth.id }).sort({ attemptNumber: -1, createdAt: -1 }).select('+questionSnapshot +finalizeAs');
-  if (!attempt) return res.json({ attempt: null, retakeAvailable: false, serverNow: new Date() });
+  if (!attempt) return res.json({ attempt: null, serverNow: new Date() });
   if (attempt.status === 'in_progress' && quiz.status !== 'paused' && attempt.deadlineAt <= new Date()) attempt = await finalizeAttempt(attempt._id, 'expired');
   if (attempt.status === 'finalizing') attempt = await finalizeAttempt(attempt._id, attempt.violationReason ? 'auto_submitted' : attempt.deadlineAt <= new Date() ? 'expired' : 'submitted');
-  const retakeAvailable = Boolean(await Attempt.exists({ quizId: quiz._id, studentId: req.auth.id, status: mongoose.trusted({ $in: ['submitted', 'expired'] }), retakeApprovedAt: mongoose.trusted({ $ne: null }), retakeConsumedAt: null }));
-  res.json({ retakeAvailable, attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, submittedAt: attempt.submittedAt, serverNow: new Date(), questions: snapshot(attempt), ...answerObject(attempt) } });
+  res.json({ attempt: { id: String(attempt._id), status: attempt.status, deadlineAt: attempt.deadlineAt, submittedAt: attempt.submittedAt, serverNow: new Date(), questions: snapshot(attempt), ...answerObject(attempt) } });
 });
 router.put('/quiz/attempt/:attemptId/answer', async (req, res) => {
   const { attemptId } = req.params;
