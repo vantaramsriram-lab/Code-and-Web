@@ -337,7 +337,7 @@ router.post('/results/:attemptId/count-for-leaderboard', async (req, res) => {
   const attempt = await Attempt.findOne({ _id: attemptId, quizId: quiz._id });
   if (!attempt) throw new HttpError(404, 'Attempt not found.');
   if (!['submitted', 'expired', 'auto_submitted'].includes(attempt.status)) throw new HttpError(409, 'Only completed attempts can count toward the leaderboard.');
-  await Attempt.updateMany({ quizId: quiz._id, studentId: attempt.studentId, _id: { $ne: attempt._id } }, { $set: { countedForLeaderboard: false } });
+  await Attempt.updateMany({ quizId: quiz._id, studentId: attempt.studentId, _id: mongoose.trusted({ $ne: attempt._id }) }, { $set: { countedForLeaderboard: false } });
   try {
     attempt.countedForLeaderboard = true;
     await attempt.save();
