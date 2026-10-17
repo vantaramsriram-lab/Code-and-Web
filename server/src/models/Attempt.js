@@ -23,8 +23,8 @@ const attemptSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Legacy unique quiz/student index is removed by scripts/migrateRetakes.js.
-attemptSchema.index({ quizId: 1, studentId: 1 }, { unique: true, partialFilterExpression: { status: { $in: ['in_progress', 'finalizing'] } } });
-attemptSchema.index({ quizId: 1, studentId: 1 }, { unique: true, partialFilterExpression: { countedForLeaderboard: true } });
+attemptSchema.index({ quizId: 1, studentId: 1 }, { unique: true, partialFilterExpression: { status: { $in: ['in_progress', 'finalizing'] } }, name: 'active_attempt_per_student_quiz' });
+attemptSchema.index({ quizId: 1, studentId: 1 }, { unique: true, partialFilterExpression: { countedForLeaderboard: true }, name: 'counted_attempt_per_student_quiz' });
 attemptSchema.index({ status: 1, deadlineAt: 1 });
 attemptSchema.index({ quizId: 1, status: 1, score: -1, submittedAt: 1 });
 attemptSchema.index({ quizId: 1, studentId: 1, attemptNumber: -1 });
