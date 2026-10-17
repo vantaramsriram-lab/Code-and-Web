@@ -4,8 +4,8 @@ const snapshotSchema = new mongoose.Schema({ questionId: { type: mongoose.Schema
 const attemptSchema = new mongoose.Schema({
   quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
-  status: { type: String, enum: ['in_progress', 'finalizing', 'submitted', 'auto_submitted', 'expired'], default: 'in_progress', index: true },
-  finalizeAs: { type: String, enum: ['submitted', 'auto_submitted', 'expired'], default: null, select: false },
+  status: { type: String, enum: ['in_progress', 'finalizing', 'submitted', 'expired'], default: 'in_progress', index: true },
+  finalizeAs: { type: String, enum: ['submitted', 'expired'], default: null, select: false },
   answers: { type: Map, of: answerSchema, default: {} },
   questionSnapshot: { type: [snapshotSchema], required: true, select: false },
   score: { type: Number, default: null },
@@ -15,7 +15,9 @@ const attemptSchema = new mongoose.Schema({
   submittedAt: { type: Date, default: null },
   violationReason: { type: String, default: null }
 }, { timestamps: true });
-attemptSchema.index({ quizId: 1, studentId: 1 }, { unique: true });
+
+// Prevent concurrent duplicate active attempts while allowing an admin-cleared retake.
+attemptSchema.index({ quizId: 1, studentId: 1 }, { unique: true, partialFilterExpression: { status: { $in: ['in_progress', 'finalizing'] } }, name: 'active_attempt_per_student_quiz' });
 attemptSchema.index({ status: 1, deadlineAt: 1 });
 attemptSchema.index({ quizId: 1, status: 1, score: -1, submittedAt: 1 });
 export default mongoose.model('Attempt', attemptSchema);
