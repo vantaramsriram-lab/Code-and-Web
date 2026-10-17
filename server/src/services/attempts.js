@@ -4,9 +4,9 @@ import Question from '../models/Question.js';
 import Quiz from '../models/Quiz.js';
 import { scoreAnswers } from './score.js';
 
-/** Claim first so no answer can race into the scoring snapshot. Idempotent across submit, expiry, and visibility events. */
+/** Claim first so no answer can race into the scoring snapshot. Idempotent across student submission and expiry. */
 export async function finalizeAttempt(attemptId, finalStatus = 'submitted', reason = null, now = new Date()) {
-  const allowed = ['submitted', 'auto_submitted', 'expired'];
+  const allowed = ['submitted', 'expired'];
   if (!allowed.includes(finalStatus)) throw new Error('Invalid final attempt status');
   let attempt = await Attempt.findOneAndUpdate(
     { _id: attemptId, status: 'in_progress' },
@@ -17,7 +17,7 @@ export async function finalizeAttempt(attemptId, finalStatus = 'submitted', reas
     attempt = await Attempt.findById(attemptId).select('+questionSnapshot +finalizeAs');
     if (!attempt || attempt.status !== 'finalizing') return attempt;
     // Recover the original intent if a process stopped while finalization was in progress.
-    finalStatus = attempt.finalizeAs || (attempt.violationReason ? 'auto_submitted' : attempt.deadlineAt <= now ? 'expired' : finalStatus);
+    finalStatus = attempt.finalizeAs || (attempt.deadlineAt <= now ? 'expired' : finalStatus);
   }
   const questions = await Question.find({ quizId: attempt.quizId }).select('_id correctOption').lean();
   const answers = attempt.answers instanceof Map ? attempt.answers : attempt.answers?.toObject?.() || attempt.answers;
@@ -49,7 +49,7 @@ export async function finalizeExpiredAttempts(now = new Date()) {
   for (const { _id } of due) {
     const done = await finalizeAttempt(_id, 'expired', null, now);
 
-    if (done && ['submitted', 'auto_submitted', 'expired'].includes(done.status)) {
+    if (done && ['submitted', 'expired'].includes(done.status)) {
       finalized++;
     }
   }

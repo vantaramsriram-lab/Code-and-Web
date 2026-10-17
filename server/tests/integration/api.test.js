@@ -92,16 +92,26 @@ test('auth, admin protections, quiz answer persistence, submission privacy, CSV 
     const results = await adminAgent.get('/api/admin/results').expect(200);
     assert.equal(results.body.rows.find((r) => r.id === attempt.id).correctAnswers, 1);
   });
-  await t.test('tab-switch violation finalizes idempotently and rejects later answers', async () => {
+  await t.test('tab-switch violations do not auto-submit or block an active attempt', async () => {
     const agent = request.agent(app);
     await agent.post('/api/student/entry').send({ scholarNumber: '000103' }).expect(200);
     const { body } = await agent.post('/api/quiz/attempt/start').expect(201);
-    const violation = await agent.post(`/api/quiz/attempt/${body.attempt.id}/violation`).expect(200);
-    assert.equal(violation.body.status, 'auto_submitted');
-    await agent.put(`/api/quiz/attempt/${body.attempt.id}/answer`).send({ questionId, selectedOption: 0, revision: 1 }).expect(409);
-    const repeated = await agent.post(`/api/quiz/attempt/${body.attempt.id}/violation`).expect(200);
-    assert.equal(repeated.body.status, 'auto_submitted');
-    assert.equal((await Attempt.findById(body.attempt.id)).violationReason, 'prohibited_tab_switch');
+
+    // The legacy violation endpoint must explicitly reject auto-submission.
+    await agent.post(`/api/quiz/attempt/${body.attempt.id}/violation`).expect(410);
+
+    const afterViolation = await Attempt.findById(body.attempt.id);
+    assert.equal(afterViolation.status, 'in_progress');
+    assert.equal(afterViolation.violationReason, null);
+
+    // A tab switch must not prevent the student from continuing and saving answers.
+    await agent.put(`/api/quiz/attempt/${body.attempt.id}/answer`)
+      .send({ questionId, selectedOption: 0, revision: 1 })
+      .expect(200);
+
+    const repeated = await agent.post(`/api/quiz/attempt/${body.attempt.id}/violation`).expect(410);
+    assert.match(repeated.body.message, /disabled/i);
+    assert.equal((await Attempt.findById(body.attempt.id)).status, 'in_progress');
   });
   await t.test('expired attempts cannot be updated and are finalized as expired', async () => {
     const agent = request.agent(app);
